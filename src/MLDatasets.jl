@@ -48,6 +48,10 @@ include("download.jl")
 
 include("containers/filedataset.jl")
 export FileDataset
+
+include("containers/functionalfiledataset.jl")
+export FunctionalFileDataset, FunctionalSubDataset
+
 include("containers/cacheddataset.jl")
 export CachedDataset
 # include("containers/tabledataset.jl")
