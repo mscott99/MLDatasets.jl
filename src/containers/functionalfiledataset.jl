@@ -1,20 +1,21 @@
 """
     FunctionalFileDataset([loadfn = FileIO.load,] folderpath, makefilenamefunction
 """
-struct FunctionalFileDataset{F,T<:AbstractString,K} <: AbstractDataContainer
-    loadfn::F
-    folderpath::T
-    makefilename::K
+struct FunctionalFileDataset <: AbstractDataContainer
+    loadfn::Function
+    folderpath::String
+    makefilename::Function
     thelength::Int
-    function FunctionalFileDataset(loadfn, folderpath, makefilename)
-        thelength = Base.length(readdir(folderpath))
-        new{typeof(loadfn),typeof(folderpath),typeof(makefilename)}(loadfn, folderpath, makefilename, thelength)
-    end
+end
+
+function FunctionalFileDataset(folderpath, makefilename)
+    thelength = Base.length(readdir(folderpath))
+    FunctionalFileDataset(FileIO.load, folderpath, makefilename, thelength)
 end
 
 FunctionalFileDataset(folderpath, makefilename) = FunctionalFileDataset(FileIO.load, folderpath, makefilename)
 
-Base.getindex(dataset::FunctionalFileDataset, i::Integer) = dataset.loadfn(joinpath(dataset.folderpath, dataset.makefilename(i)))
+Base.getindex(dataset::FunctionalFileDataset, i::Integer) = dataset.loadfn(joinpath(dataset.folderpath, dataset.makefilename(i)))[:, :, :, 1]
 Base.getindex(dataset::FunctionalFileDataset, is::AbstractVector) = map(Base.Fix1(getobs, dataset), is)
 Base.length(dataset::FunctionalFileDataset) = dataset.thelength
 

@@ -7,7 +7,7 @@ function with_accept(f, manual_overwrite)
     withenv(f, "DATADEPS_ALWAYS_ACCEPT" => string(auto_accept))
 end
 
-function datadir(depname, dir = nothing; i_accept_the_terms_of_use = nothing)
+function datadir(depname, dir=nothing; i_accept_the_terms_of_use=nothing)
     with_accept(i_accept_the_terms_of_use) do
         if dir === nothing
             # use DataDeps defaults
@@ -25,7 +25,7 @@ function datadir(depname, dir = nothing; i_accept_the_terms_of_use = nothing)
     end::String
 end
 
-function datafile(depname, filename, dir = nothing; recurse = true, kw...)
+function datafile(depname, filename, dir=nothing; recurse=true, kw...)
     path = joinpath(datadir(depname, dir; kw...), filename)
     if !isfile(path)
         @warn "The file \"$path\" does not exist, even though the dataset-specific folder does. This is an unusual situation that may have been caused by a manual creation of an empty folder, or manual deletion of the given file \"$filename\"."
@@ -37,7 +37,7 @@ function datafile(depname, filename, dir = nothing; recurse = true, kw...)
             download_dep(depname, dir; kw...)
         end
         if recurse
-            datafile(depname, filename, dir; recurse = false, kw...)
+            datafile(depname, filename, dir; recurse=false, kw...)
         else
             error("The file \"$path\" still does not exist. One possible explaination could be a spelling error in the name of the requested file.")
         end
@@ -46,7 +46,11 @@ function datafile(depname, filename, dir = nothing; recurse = true, kw...)
     end::String
 end
 
-function download_dep(depname, dir = DataDeps.determine_save_path(depname); kw...)
+function download_dep(depname, dir=DataDeps.determine_save_path(depname); kw...)
+    if DataDeps.registry[depname] isa DataDeps.ManualDataDep
+        @warn "not downloading a manual data dep"
+        return nothing
+    end
     DataDeps.download(DataDeps.registry[depname], dir; kw...)
 end
 

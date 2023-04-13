@@ -1,7 +1,7 @@
 function __init__celeba()
     DEPNAME = "CELEBA"
 
-    register(DataDep(
+    register(ManualDataDep(
         DEPNAME,
         """
         Dataset: The CELEBA dataset
@@ -10,13 +10,11 @@ function __init__celeba()
 
         CelebFaces Attributes Dataset (CelebA) is a large-scale face attributes dataset with more than 200K celebrity images, each with 40 attribute annotations.
 
-        """,
-        "https://",
-        "c4a38c50a1bc5f3a1c5537f",
-        post_fetch_method=DataDeps.unpack
+        """
+        #"c4a38c50a1bc5f3a1c5537f"#,
+        #post_fetch_method=DataDeps.unpack
     ))
 end
-
 
 """
     CIFAR10(; Tx=Float32, split=:train, dir=nothing)
@@ -77,74 +75,45 @@ Dict{String, Any} with 2 entries:
   "class_names"    => ["airplane", "automobile", "bird", "cat", "deer", "dog", "frog", "horse", "ship", "truck"]
 ```
 """
-struct CELEBA <: SupervisedDataset
-    metadata::Dict{String,Any}
+struct CELEBA{T} <: SupervisedDataset
+    #metadata::Dict{String,Any}
     split::Symbol
-    features::Array{<:Any,4}
-    targets::Vector{Int}
+    features::T
+    #targets::Vector{Int}
 end
 
-CELEBA(; split=:train, Tx=Float32, dir=nothing) = CIFAR10(Tx, split; dir)
-CELEBA(split::Symbol; kws...) = CIFAR10(; split, kws...)
-CELEBA(Tx::Type; kws...) = CIFAR10(; Tx, kws...)
+#CELEBA(; split=:train, Tx=Float32, dir=nothing) = CELEBA(Tx, split; dir)
+#CELEBA(split::Symbol; kws...) = CELEBA(; split, kws...)
+#CELEBA(Tx::Type; kws...) = CELEBA(; Tx, kws...)
 
-function CELEBA(Tx::Type, split::Symbol; dir=nothing)
-    DEPNAME = "CIFAR10"
-    NCHUNKS = 5
-    TESTSET_FILENAME = joinpath("cifar-10-batches-bin", "test_batch.bin")
+getcelebafilename(i::Integer) = lpad(i, 6, "0") * ".jpg"
+#readdir("/Users/matthewscott/.julia/datadeps/CELEBA/img_align_celeba")
 
-    filename_for_chunk(file_index::Int) =
-        joinpath("cifar-10-batches-bin", "data_batch_$(file_index).bin")
+function CELEBA(split::Symbol)
+    DEPNAME = "CELEBA"
+    features = FunctionalFileDataset(joinpath(datadep"CELEBA", "img_align_celeba"), getcelebafilename)
+    CELEBA(split, features)
+end
+
+function CELEBA(Tx::Type, split::Symbol; dir=nothing, split_ratio=0.8)
+    DEPNAME = "CELEBA"
 
     @assert split ∈ (:train, :test)
 
+    main_dataset = FunctionalFileDataset(datadir("CELEBA", "img_align_celeba"), getcelebafilename)
     if split == :train
-        # placeholders for the chunks
-        Xs = Vector{Array{UInt8,4}}(undef, NCHUNKS)
-        Ys = Vector{Vector{Int}}(undef, NCHUNKS)
-        # loop over all 5 trainingset files (i.e. chunks)
-        for file_index in 1:NCHUNKS
-            file_name = filename_for_chunk(file_index)
-            file_path = datafile(DEPNAME, file_name, dir)
-            # load all the data from each file and append it to
-            # the placeholders X and Y
-            X, Y = CIFAR10Reader.readdata(file_path)
-            Xs[file_index] = X
-            Ys[file_index] = Y
-
-            #TODO define a lazy version that reads a signle image only when asked
-            # file_index = ceil(Int, index / Reader.CHUNK_SIZE)
-            # file_name = filename_for_chunk(file_index)
-            # file_path = datafile(DEPNAME, file_name, dir)
-            ## once we know the file we just need to compute the approriate
-            ## offset of the image realtive to that file.
-            # sub_index = ((index - 1) % Reader.CHUNK_SIZE) + 1
-            # image, label = CIFAR10Reader.readdata(file_path, sub_index)
-        end
-        # cat all the placeholders into one image array
-        # and one label array. (good enough)
-        images = cat(Xs..., dims=4)::Array{UInt8,4}
-        labels = vcat(Ys...)::Vector{Int}
-        # optionally transform the image array before returning
-        features, targets = bytes_to_type(Tx, images), labels
+        features = FunctionalSubDataset(main_dataset, :train, split_ratio)
     else
-        file_path = datafile(DEPNAME, TESTSET_FILENAME, dir)
-        # simply read the complete content of the testset file
-        images, labels = CIFAR10Reader.readdata(file_path)
-        # optionally transform the image array before returning
-        features, targets = bytes_to_type(Tx, images), labels
+        features = FunctionalSubDataset(main_dataset, :test, split_ratio)
     end
 
-    metadata = Dict{String,Any}()
-    metadata["class_names"] = ["airplane", "automobile", "bird", "cat", "deer", "dog", "frog", "horse", "ship", "truck"]
-    metadata["n_observations"] = size(features)[end]
-    return CIFAR10(metadata, split, features, targets)
+    return CELEBA(split, features)
 end
 
-convert2image(::Type{<:CIFAR10}, x::AbstractArray{<:Integer}) =
-    convert2image(CIFAR10, reinterpret(N0f8, convert(Array{UInt8}, x)))
+convert2image(::Type{<:CELEBA}, x::AbstractArray{<:Integer}) =
+    convert2image(CELEBA, reinterpret(N0f8, convert(Array{UInt8}, x)))
 
-function convert2image(::Type{<:CIFAR10}, x::AbstractArray{T,N}) where {T,N}
+function convert2image(::Type{<:CELEBA}, x::AbstractArray{T,N}) where {T,N}
     @assert N == 3 || N == 4
     x = permutedims(x, (3, 2, 1, 4:N...))
     ImageCore = ImageShow.ImageCore
@@ -153,13 +122,13 @@ end
 
 
 # DEPRECATED INTERFACE, REMOVE IN v0.7 (or 0.6.x)
-function Base.getproperty(::Type{CIFAR10}, s::Symbol)
+function Base.getproperty(::Type{CELEBA}, s::Symbol)
     if s == :traintensor
         @warn "CIFAR10.traintensor() is deprecated, use `CIFAR10(split=:train).features` instead."
         traintensor(T::Type=N0f8; kws...) = traintensor(T, :; kws...)
         traintensor(i; kws...) = traintensor(N0f8, i; kws...)
         function traintensor(T::Type, i; dir=nothing)
-            CIFAR10(; split=:train, Tx=T, dir)[i][1]
+            CELEBA(; split=:train, Tx=T, dir)[i][1]
         end
         return traintensor
     elseif s == :testtensor
@@ -167,21 +136,21 @@ function Base.getproperty(::Type{CIFAR10}, s::Symbol)
         testtensor(T::Type=N0f8; kws...) = testtensor(T, :; kws...)
         testtensor(i; kws...) = testtensor(N0f8, i; kws...)
         function testtensor(T::Type, i; dir=nothing)
-            CIFAR10(; split=:test, Tx=T, dir)[i][1]
+            CELEBA(; split=:test, Tx=T, dir)[i][1]
         end
         return testtensor
     elseif s == :trainlabels
         @warn "CIFAR10.trainlabels() is deprecated, use `CIFAR10(split=:train).targets` instead."
         trainlabels(; kws...) = trainlabels(:; kws...)
         function trainlabels(i; dir=nothing)
-            CIFAR10(; split=:train, dir)[i][2]
+            CELEBA(; split=:train, dir)[i][2]
         end
         return trainlabels
     elseif s == :testlabels
         @warn "CIFAR10.testlabels() is deprecated, use `CIFAR10(split=:test).targets` instead."
         testlabels(; kws...) = testlabels(:; kws...)
         function testlabels(i; dir=nothing)
-            CIFAR10(; split=:test, dir)[i][2]
+            CELEBA(; split=:test, dir)[i][2]
         end
         return testlabels
     elseif s == :traindata
@@ -189,7 +158,7 @@ function Base.getproperty(::Type{CIFAR10}, s::Symbol)
         traindata(T::Type=N0f8; kws...) = traindata(T, :; kws...)
         traindata(i; kws...) = traindata(N0f8, i; kws...)
         function traindata(T::Type, i; dir=nothing)
-            CIFAR10(; split=:train, Tx=T, dir)[i]
+            CELEBA(; split=:train, Tx=T, dir)[i]
         end
         return traindata
     elseif s == :testdata
@@ -197,12 +166,12 @@ function Base.getproperty(::Type{CIFAR10}, s::Symbol)
         testdata(T::Type=N0f8; kws...) = testdata(T, :; kws...)
         testdata(i; kws...) = testdata(N0f8, i; kws...)
         function testdata(T::Type, i; dir=nothing)
-            CIFAR10(; split=:test, Tx=T, dir)[i]
+            CELEBA(; split=:test, Tx=T, dir)[i]
         end
         return testdata
     elseif s == :convert2image
         @warn "CIFAR10.convert2image(x) is deprecated, use `convert2image(CIFAR10, x)` instead"
-        return x -> convert2image(CIFAR10, x)
+        return x -> convert2image(CELEBA, x)
     else
         return getfield(CIFAR10, s)
     end
